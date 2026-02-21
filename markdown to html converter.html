@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Markdown → HTML (Extended)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1419;
+      --fg: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --border: #30363d;
+      --codebg: #161b22;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: var(--bg);
+      color: var(--fg);
+    }
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    header .actions {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+    button, select, label {
+      background: var(--codebg);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+    button:hover { border-color: var(--accent); }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      height: calc(100vh - 64px);
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .pane header {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+    }
+    .pane header h2 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    textarea {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      border: none;
+      outline: none;
+      padding: 16px;
+      font-size: 16px;
+      line-height: 1.5;
+      background: transparent;
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    #out {
+      flex: 1;
+      overflow: auto;
+      padding: 16px;
+    }
+    /* Markdown content styling */
+    #out h1, #out h2, #out h3, #out h4, #out h5, #out h6 { margin: 1.25em 0 0.6em; }
+    #out p { margin: 0.8em 0; }
+    #out a { color: var(--accent); text-decoration: none; }
+    #out a:hover { text-decoration: underline; }
+    #out blockquote {
+      border-left: 4px solid var(--border);
+      margin: 1em 0;
+      padding: 0.6em 1em;
+      color: var(--muted);
+      background: rgba(88,166,255,0.06);
+    }
+    #out code, #out pre code {
+      background: var(--codebg);
+      border-radius: 6px;
+    }
+    #out code {
+      padding: 0.1em 0.35em;
+      border: 1px solid var(--border);
+    }
+    #out pre {
+      background: var(--codebg);
+      padding: 14px;
+      overflow: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    #out table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1em 0;
+      border: 1px solid var(--border);
+    }
+    #out th, #out td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      vertical-align: top;
+    }
+    .katex { font-size: 1.05em; }
+    .task-list-item {
+      list-style: none;
+    }
+    .container-note {
+      border: 1px dashed var(--accent);
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(88,166,255,0.06);
+    }
+    .toc {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: rgba(99, 110, 123, 0.15);
+    }
+    footer {
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+
+  <!-- highlight.js (code highlighting) -->
+  <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github-dark.min.css">
+  <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+
+  <!-- DOMPurify (XSS protection) -->
+  <script src="https://unpkg.com/dompurify@3.1.6/dist/purify.min.js"></script>
+
+  <!-- markdown-it core -->
+  <script src="https://unpkg.com/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
+
+  <!-- markdown-it plugins (extended features) -->
+  <script src="https://unpkg.com/markdown-it-emoji@3.0.0/dist/markdown-it-emoji.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-footnote@3.0.3/dist/markdown-it-footnote.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-sub@1.0.0/dist/markdown-it-sub.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-sup@1.0.0/dist/markdown-it-sup.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-mark@4.0.0/dist/markdown-it-mark.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-container@4.0.0/dist/markdown-it-container.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-multimd-table@4.2.3/multimd-table.min.js"></script>
+
+  <!-- KaTeX (math) -->
+  <link rel="stylesheet" href="https://unpkg.com/katex@0.16.11/dist/katex.min.css">
+  <script src="https://unpkg.com/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://unpkg.com/markdown-it-katex@2.0.3/dist/markdown-it-katex.min.js"></script>
+
+  <!-- Mermaid (diagrams) -->
+  <script src="https://unpkg.com/mermaid@11.0.2/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Markdown → HTML (Extended)</h1>
+    <div class="actions">
+      <label>
+        Theme:
+        <select id="theme">
+          <option value="github-dark">GitHub Dark</option>
+          <option value="github">GitHub Light</option>
+          <option value="atom-one-dark">Atom One Dark</option>
+          <option value="atom-one-light">Atom One Light</option>
+        </select>
+      </label>
+      <button id="copyHtml">Copy HTML</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="pane">
+      <header><h2>Markdown</h2></header>
+      <textarea id="md" spellcheck="false"></textarea>
+    </section>
+
+    <section class="pane">
+      <header><h2>Preview</h2></header>
+      <div id="out" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer>
+    Supports: GFM tables, task lists, emojis, footnotes, sub/sup, mark, custom containers, advanced tables, math (KaTeX), code highlighting, and Mermaid diagrams.
+  </footer>
+
+  <script>
+    // Initialize Mermaid
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+    // Markdown-it with extended features
+    const md = markdownit({
+      html: true,       // allow raw HTML
+      linkify: true,    // autolink URLs
+      typographer: true,
+      highlight: function (str, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+          try { return '<pre><code class="hljs ' + lang + '">' + hljs.highlight(str, {language: lang}).value + '</code></pre>'; }
+          catch (__) {}
+        }
+        return '<pre><code class="hljs">' + md.utils.escapeHtml(str) + '</code></pre>';
+      }
+    })
+      .use(markdownitEmoji)
+      .use(markdownitFootnote)
+      .use(markdownitSub)
+      .use(markdownitSup)
+      .use(markdownitMark)
+      .use(markdownitTaskLists, { enabled: true, label: true })
+      .use(multiMdTable, { multiline: true, rowspan: true, headerless: true })
+      .use(markdownitKatex, { throwOnError: false, errorColor: "#cc0000" });
+
+    // Custom container example: :::note ... :::
+    md.use(markdownitContainer, 'note', {
+      validate: function(params) {
+        return params.trim().match(/^note(\s+.*)?$/);
+      },
+      render: function(tokens, idx) {
+        const m = tokens[idx].info.trim().match(/^note(\s+.*)?$/);
+        if (tokens[idx].nesting === 1) {
+          const label = m && m[1] ? m[1].trim() : '';
+          return '<div class="container-note">' + (label ? '<strong>' + md.utils.escapeHtml(label) + ':</strong> ' : '');
+        } else {
+          return '</div>\n';
+        }
+      }
+    });
+
+    // Simple TOC generator (h1-h3)
+    function generateTOC(container) {
+      const headings = container.querySelectorAll('h1, h2, h3');
+      if (!headings.length) return '';
+      const items = Array.from(headings).map(h => {
+        if (!h.id) {
+          h.id = h.textContent.trim().toLowerCase().replace(/[^\w]+/g, '-');
+        }
+        return `<li><a href="#${h.id}">${h.tagName.toLowerCase()} — ${h.textContent}</a></li>`;
+      }).join('');
+      return `<div class="toc"><strong>Contents</strong><ul>${items}</ul></div>`;
+    }
+
+    const input = document.getElementById('md');
+    const out = document.getElementById('out');
+
+    // Sample content
+    input.value = `# Extended Markdown demo
+
+Inline math: $E = mc^2$ and \\(\\int_0^1 x^2 \\, dx = \\frac{1}{3}\\).
+
+Block math:
+
+$$
+\\begin{aligned}
+\\nabla \\cdot \\vec{E} &= \\frac{\\rho}{\\varepsilon_0}\\\\
+\\nabla \\times \\vec{E} &= -\\frac{\\partial \\vec{B}}{\\partial t}
+\\end{aligned}
+$$
+
+Code with language and highlight:
+
+\`\`\`js
+function hello(name) {
+  console.log(\`Hello, \${name}!\`);
+}
+\`\`\`
+
+Task list:
+
+- [x] Write converter
+- [ ] Add more plugins
+- [ ] Ship it
+
+Footnote demo[^1] and sub~text~, sup^text^, ==highlight==, and emojis :sparkles: :tada:.
+
+[^1]: Footnote content here.
+
+GFM table:
+
+| Feature | Support |
+|---|---|
+| Task lists | ✅ |
+| Emojis | ✅ |
+| Math | ✅ |
+
+Advanced table (rowspan):
+
+| A | B | C |
+|---|---|---|
+| A1 | B1 | C1 |
+| A2 | B2 | C2 |
+| A3 | B3 | C3 |
+
+Custom container:
+
+:::note Optional label
+This is a callout container.
+:::
+
+Mermaid diagram:
+
+\`\`\`mermaid
+graph TD
+  A[Start] --> B{Choose}
+  B -->|Yes| C[Do the thing]
+  B -->|No| D[Skip]
+\`\`\`
+
+> Tip: Paste your own markdown on the left. The HTML is sanitized before rendering.`;
+
+    function render() {
+      // Render Markdown → HTML
+      const rawHtml = md.render(input.value);
+
+      // Create a temporary container to post-process (Mermaid, TOC, etc.)
+      const temp = document.createElement('div');
+      temp.innerHTML = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['target'] });
+
+      // Handle mermaid code blocks
+      const mermaidBlocks = temp.querySelectorAll('code.language-mermaid, code.hljs.language-mermaid');
+      mermaidBlocks.forEach(codeEl => {
+        const parentPre = codeEl.closest('pre');
+        const graph = codeEl.textContent;
+        const mermaidDiv = document.createElement('div');
+        mermaidDiv.className = 'mermaid';
+        mermaidDiv.textContent = graph;
+        if (parentPre) parentPre.replaceWith(mermaidDiv);
+        else codeEl.replaceWith(mermaidDiv);
+      });
+
+      // Prepend TOC if there are headings
+      const tocHtml = generateTOC(temp);
+      out.innerHTML = tocHtml + temp.innerHTML;
+
+      // Render Mermaid diagrams
+      try {
+        mermaid.run({ nodes: out.querySelectorAll('.mermaid') });
+      } catch (e) {
+        console.warn('Mermaid render error:', e);
+      }
+    }
+
+    input.addEventListener('input', render);
+    render();
+
+    // Copy HTML button
+    document.getElementById('copyHtml').addEventListener('click', async () => {
+      const html = out.innerHTML;
+      try {
+        await navigator.clipboard.writeText(html);
+        const btn = document.getElementById('copyHtml');
+        const old = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = old, 1200);
+      } catch {
+        alert('Failed to copy HTML');
+      }
+    });
+
+    // Theme switcher for highlight.js
+    const themeMap = {
+      'github-dark': 'https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github-dark.min.css',
+      'github': 'https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/github.min.css',
+      'atom-one-dark': 'https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/atom-one-dark.min.css',
+      'atom-one-light': 'https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/atom-one-light.min.css',
+    };
+    const themeSelect = document.getElementById('theme');
+    themeSelect.addEventListener('change', (e) => {
+      const href = themeMap[e.target.value];
+      const link = document.querySelector('link[href*="highlightjs"]');
+      if (link) link.href = href;
+      render();
+    });
+  </script>
+</body>
+</html>
